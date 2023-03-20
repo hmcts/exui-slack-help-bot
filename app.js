@@ -15,6 +15,7 @@ const {
     duplicateHelpRequest,
     resolveHelpRequestBlocks,
     helpRequestDocumentation,
+    openAskQuestionRequestBlocks
 } = require("./src/messages");
 const { App, LogLevel, SocketModeReceiver, WorkflowStep } = require('@slack/bolt');
 const crypto = require('crypto')
@@ -141,7 +142,7 @@ const ws = new WorkflowStep('superbot_help_request', {
         // form
         await ack();
         const { values } = view.state;
-        
+
         console.log('Slack workflow has been changed: ' + JSON.stringify(values));
 
         // names/paths of these values must match those in the
@@ -198,7 +199,7 @@ const ws = new WorkflowStep('superbot_help_request', {
             },
         };
 
-        const outputs = [ ];
+        const outputs = [];
 
         await update({ inputs, outputs });
     },
@@ -247,9 +248,8 @@ const ws = new WorkflowStep('superbot_help_request', {
                 jiraId
             })
         });
-      
-        if (!result.ok)
-        {
+
+        if (!result.ok) {
             console.log("An error occurred when posting to Slack: " + JSON.stringify(result));
         }
 
@@ -260,8 +260,7 @@ const ws = new WorkflowStep('superbot_help_request', {
             blocks: helpRequestDetails(helpRequest)
         });
 
-        if (!response.ok)
-        {
+        if (!response.ok) {
             console.log("An error occurred when posting to Slack: " + JSON.stringify(response))
             return;
         }
@@ -341,6 +340,23 @@ app.shortcut('launch_shortcut', async ({ shortcut, body, ack, context, client })
     }
 });
 
+app.shortcut('enquiries', async ({ shortcut, body, ack, context, client }) => {
+    try {
+        // Acknowledge shortcut request
+        await ack();
+
+        // Un-comment if you want the JSON for block-kit builder (https://app.slack.com/block-kit-builder/T1L0WSW9F)
+        // console.log(JSON.stringify(openHelpRequestBlocks().blocks))
+
+        await client.views.open({
+            trigger_id: shortcut.trigger_id,
+            view: openAskQuestionRequestBlocks()
+        });
+    } catch (error) {
+        console.error(error);
+    }
+});
+
 function extractLabels(values) {
     const priority = `priority-${values.priority.priority.selected_option.value}`
     const team = `team-${values.team.team.selected_option.value}`
@@ -348,10 +364,6 @@ function extractLabels(values) {
 }
 
 app.view('create_help_request', async ({ ack, body, view, client }) => {
-    ////////////////////////////////////////////////////////////
-    //// SuperBot: This entry point isn't used anymore, but ////
-    ////           we can keep it around just in case :)    ////
-    ////////////////////////////////////////////////////////////
 
     // Acknowledge the view_submission event
     await ack();
@@ -407,6 +419,46 @@ app.view('create_help_request', async ({ ack, body, view, client }) => {
             ...helpRequest,
             slackLink: permaLink
         })
+    } catch (error) {
+        console.error(error);
+    }
+
+});
+
+app.view('create_enquiries_request', async ({ ack, body, view, client }) => {
+
+    // Acknowledge the view_submission event
+    await ack();
+
+    const user = body.user.id;
+
+    // Message the user
+    try {
+        const userEmail = (await client.users.profile.get({
+            user
+        })).profile.email
+
+        const helpRequest = {
+            user,
+            question: view.state.values.question.question.value,
+            priority: 'Low'
+        }
+
+        const jiraId = await createHelpRequest({
+            summary: 'Enquiry: ' + helpRequest.question,
+            userEmail,
+            labels: ['enquiry']
+        })
+
+        const result = await client.chat.postMessage({
+            channel: reportChannel,
+            text: 'Enquiry raised by ' + userEmail,
+            // blocks: helpRequestRaised({
+            //     ...helpRequest,
+            //     jiraId
+            // })
+        });
+
     } catch (error) {
         console.error(error);
     }
@@ -540,7 +592,7 @@ app.action('resolve_help_request', async ({
         // Trigger IDs have a short lifespan, so process them first
         await client.views.open({
             trigger_id: body.trigger_id,
-            view: resolveHelpRequestBlocks({thread_ts: body.message.ts}),
+            view: resolveHelpRequestBlocks({ thread_ts: body.message.ts }),
         });
 
         const jiraId = extractJiraIdFromBlocks(body.message.blocks)
@@ -577,7 +629,7 @@ app.action('resolve_help_request', async ({
 });
 
 app.view('document_help_request', async ({ ack, body, view, client }) => {
-    try{
+    try {
         await ack();
 
         //console.log(JSON.stringify(body, null, 2));

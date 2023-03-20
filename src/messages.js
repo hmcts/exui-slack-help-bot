@@ -500,6 +500,89 @@ function openHelpRequestBlocks() {
 
 }
 
+function openAskQuestionRequestBlocks() {
+    return {
+        "title": {
+            "type": "plain_text",
+            "text": "ExUI Enquiries"
+        },
+        "submit": {
+            "type": "plain_text",
+            "text": "Submit"
+        },
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "question",
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "question",
+                    "multiline": true,
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "Ask the ExUI team a question..."
+                    }
+                },
+                "label": {
+                    "type": "plain_text",
+                    "text": "Question"
+                }
+            }, 
+            {
+                "type": "input",
+                "block_id": "team",
+                "element": {
+                    "type": "static_select",
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "Select other if missing",
+                        "emoji": true
+                    },
+                    "options": [
+                        option('Access Management', 'am'),
+                        option('Architecture'),
+                        option('Bulk scan', 'bulkscan'),
+                        option('Bulk print', 'bulkprint'),
+                        option('CCD'),
+                        option('Civil Unspecified', 'CivilUnspec'),
+                        option('CMC'),
+                        option('Divorce'),
+                        option('No fault divorce', 'nfdivorce'),
+                        option('Ethos'),
+                        option('Evidence Management', 'evidence'),
+                        option('Expert UI', 'xui'),
+                        option('Financial Remedy', 'finrem'),
+                        option('FPLA'),
+                        option('Family Private Law', 'FPRL'),
+                        option('Heritage'),
+                        option('HMI'),
+                        option('Management Information', 'mi'),
+                        option('IDAM'),
+                        option('Other'),
+                        option('Private Law','private-law'),
+                        option('Reference Data', 'refdata'),
+                        option('Reform Software Engineering', 'reform-software-engineering'),
+                        option('Security Operations or Secure design', 'security'),
+                        option('SSCS'),
+                        option('PayBubble'),
+                        option('PET'),
+                        option('Work Allocation', 'workallocation'),
+                    ],
+                    "action_id": "team"
+                },
+                "label": {
+                    "type": "plain_text",
+                    "text": "Which team are you from?",
+                    "emoji": true
+                }
+            }
+        ],
+        "type": "modal",
+        callback_id: 'create_enquiries_request' 
+    }
+
+}
+
 function superBotMessageBlocks(inputs) {
     return [
         {
@@ -787,3 +870,4 @@ module.exports.superBotMessageBlocks = superBotMessageBlocks;
 module.exports.duplicateHelpRequest = duplicateHelpRequest;
 module.exports.resolveHelpRequestBlocks = resolveHelpRequestBlocks;
 module.exports.helpRequestDocumentation = helpRequestDocumentation;
+module.exports.openAskQuestionRequestBlocks = openAskQuestionRequestBlocks;

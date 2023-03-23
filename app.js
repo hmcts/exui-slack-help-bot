@@ -1,5 +1,7 @@
 const config = require('@hmcts/properties-volume').addTo(require('config'))
 const setupSecrets = require('./src/setupSecrets');
+const fs = require('fs');
+const https = require('https');
 // must be called before any config.get calls
 setupSecrets.setup();
 
@@ -29,7 +31,9 @@ const {
     searchForUnassignedOpenIssues,
     startHelpRequest,
     updateHelpRequestDescription,
-    getIssueDescription, markAsDuplicate
+    getIssueDescription,
+    markAsDuplicate,
+    addAttachmentToHelpRequest
 } = require("./src/service/persistence");
 const appInsights = require('./src/modules/appInsights')
 
@@ -800,25 +804,26 @@ function convertProfileToName(profile) {
     return name;
 }
 
-app.event('message', async ({ event, context, client, say }) => {
+app.message(async ({ message, context, client, say }) => {
     try {
         // filter unwanted channels in case someone invites the bot to it
         // and only look at threaded messages
-        if (event.channel === reportChannelId && event.thread_ts) {
+        if (message.channel === reportChannelId && message.thread_ts) {
+
             const slackLink = (await client.chat.getPermalink({
-                channel: event.channel,
-                'message_ts': event.thread_ts
+                channel: message.channel,
+                'message_ts': message.thread_ts
             })).permalink
 
             const user = (await client.users.profile.get({
-                user: event.user
+                user: message.user
             }))
 
             const name = convertProfileToName(user.profile);
 
             const helpRequestMessages = (await client.conversations.replies({
                 channel: reportChannelId,
-                ts: event.thread_ts,
+                ts: message.thread_ts,
                 limit: 200, // after a thread is 200 long we'll break but good enough for now
             })).messages
 
@@ -831,7 +836,7 @@ app.event('message', async ({ event, context, client, say }) => {
                 const groupRegex = /<!subteam\^.+\|([^>.]+)>/g
                 const usernameRegex = /<@([^>.]+)>/g
 
-                let possibleNewTargetText = event.text.replace(groupRegex, (match, $1) => $1)
+                let possibleNewTargetText = message.text.replace(groupRegex, (match, $1) => $1)
 
                 const newTargetText = await replaceAsync(possibleNewTargetText, usernameRegex, async (match, $1) => {
                     const user = (await client.users.profile.get({
@@ -839,18 +844,50 @@ app.event('message', async ({ event, context, client, say }) => {
                     }))
                     return `@${convertProfileToName(user.profile)}`
                 });
-
-                await addCommentToHelpRequest(jiraId, {
-                    slackLink,
-                    name,
-                    message: newTargetText
-                })
+                // Attachment(s)
+                if (message.files && message.files.length > 0) {
+                    message.files.forEach(async file => {
+                        const fileUrl = file.url_private;
+                        const filename = file.name.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
+                        const downloadedAttachment = await downloadAttachmentFromSlack(fileUrl, filename);
+                        await addAttachmentToHelpRequest(jiraId, fs.createReadStream(downloadedAttachment), filename);
+                    });
+                } else {
+                    // Comment
+                    await addCommentToHelpRequest(jiraId, {
+                        slackLink,
+                        name,
+                        message: newTargetText
+                    })
+                }
             } else {
                 // either need to implement pagination or find a better way to get the first message in the thread
                 console.warn("Could not find jira ID, possibly thread is longer than 200 messages, TODO implement pagination");
             }
+
         }
     } catch (error) {
         console.error(error);
     }
 })
+
+function downloadAttachmentFromSlack(fileUrl, filename) {
+    return new Promise((resolve, reject) => {
+        https.get(fileUrl, {
+            headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
+            responseType: 'stream'
+        }, (res) => {
+            if (res.statusCode !== 200) {
+                reject(`Error downloading attachment: ${res.statusCode}`);
+                return;
+            }
+            const fileStream = fs.createWriteStream(filename);
+            res.pipe(fileStream);
+            fileStream.on('close', () => {
+                resolve(filename);
+            });
+        }).on('error', (error) => {
+            reject(`Error downloading attachment: ${error}`);
+        });
+    });
+}

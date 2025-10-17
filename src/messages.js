@@ -478,6 +478,7 @@ function openHelpRequestBlocks() {
                         option('Family Private Law', 'FPRL'),
                         option('Family Public Law', 'FPL'),
                         option('Heritage'),
+                        option('HDPI'),
                         option('HMI'),
                         option('Management Information', 'mi'),
                         option('Immigration and Asylum', 'iac'),
@@ -492,7 +493,6 @@ function openHelpRequestBlocks() {
                         option('SSCS'),
                         option('PayBubble'),
                         option('PET'),
-                        option('PCS', 'pcs'),
                         option('Work Allocation', 'workallocation'),
                     ],
                     "action_id": "team"

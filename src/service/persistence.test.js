@@ -28,7 +28,7 @@ describe('extractJiraId', () => {
             {
                 elements: [
                     {
-                        text: 'View on Jira: <https://tools.hmcts.net/jira/browse/SBOX-61|SBOX-61>'
+                        text: 'View on Jira: <https://hmcts.atlassian.net/browse/SBOX-61|SBOX-61>'
                     }
                 ]
             }

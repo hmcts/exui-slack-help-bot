@@ -1,10 +1,10 @@
 const { convertIso8601ToEpochSeconds } = require('./dateHelper');
+const config = require('config')
 
 function convertJiraKeyToUrl(jiraId) {
-    return `https://tools.hmcts.net/jira/browse/${jiraId}`;
+    const browseUrl = config.get('jira.browse_url')
+    return `${browseUrl.replace(/\/+$/, '')}/browse/${jiraId}`;
 }
-
-const config = require('config')
 
 const slackChannelId = config.get('slack.report_channel_id')
 const slackMessageIdRegex = new RegExp(`${slackChannelId}\/(.*)\\|`)

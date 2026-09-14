@@ -53,6 +53,20 @@ You will also need the JIRA details. For development purposes, these values can 
 
 Set the relevant environment variables defined in [env.template.txt](env.template.txt) based on above steps.
 
+For Jira Cloud, configure the following values:
+
+```bash
+JIRA_API_URL=https://api.atlassian.com/ex/jira/
+JIRA_BROWSE_URL=https://hmcts.atlassian.net
+JIRA_CLOUD_ID=<jira-cloud-id>
+JIRA_USERNAME=<service-account-email>
+JIRA_API_TOKEN=<atlassian-api-token>
+```
+
+Open `https://hmcts.atlassian.net/_edge/tenant_info` and copy the `cloudId`
+value into `JIRA_CLOUD_ID`. The username must be the service account's email
+address and the token must be an Atlassian Cloud API token.
+
 ## Running the application
 
 We use 'Socket mode' so no need to proxy Slack's requests. 

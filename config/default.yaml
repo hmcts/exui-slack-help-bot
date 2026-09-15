@@ -6,12 +6,10 @@ slack:
   report_channel_id: C01KHKNJUKE
 
 jira:
-  api_url: "https://api.atlassian.com/ex/jira/"
-  browse_url: "https://hmcts.atlassian.net"
-  #cloud_id: no default
+  base_url: "https://hmcts.atlassian.net"
   start_transition_id: 21
   done_transition_id: 41
-  project: SBOX
+  project: EXUI
   issue_type_name: Bug
   issue_type_id: 10900
   #username: no default

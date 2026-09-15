@@ -6,6 +6,8 @@ slack:
 
 jira:
   base_url: JIRA_BASE_URL
+  api_url: JIRA_API_URL
+  cloud_id: JIRA_CLOUD_ID
   start_transition_id: JIRA_START_TRANSITION_ID
   done_transition_id: JIRA_DONE_TRANSITION_ID
   project: JIRA_PROJECT

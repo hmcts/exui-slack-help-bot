@@ -60,6 +60,7 @@ defaults to `https://hmcts.atlassian.net`. Configure credentials using:
 JIRA_BASE_URL=https://hmcts.atlassian.net
 JIRA_API_URL=https://api.atlassian.com/ex/jira
 JIRA_CLOUD_ID=<jira-cloud-id>
+JIRA_EPIC=<epic-key>
 JIRA_USERNAME=<service-account-email>
 JIRA_API_TOKEN=<atlassian-api-token>
 ```
@@ -67,7 +68,8 @@ JIRA_API_TOKEN=<atlassian-api-token>
 The username must be the service account's email address and the token must be
 an Atlassian Cloud API token. Scoped service-account tokens are sent through
 the Atlassian API gateway using `JIRA_CLOUD_ID`; `JIRA_BASE_URL` remains the
-human-facing URL used in Slack links.
+human-facing URL used in Slack links. Set `JIRA_EPIC` to the Jira key of the
+epic that should be assigned as the parent of newly created help requests.
 
 ## Running the application
 

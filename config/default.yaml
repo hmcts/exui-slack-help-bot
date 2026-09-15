@@ -12,6 +12,7 @@ jira:
   start_transition_id: 21
   done_transition_id: 41
   project: SBOX
+  epic: EXUI-101
   issue_type_name: Bug
   issue_type_id: 10900
   #username: no default

@@ -10,6 +10,7 @@ const issueTypeId = config.get('jira.issue_type_id')
 const issueTypeName = config.get('jira.issue_type_name')
 
 const jiraProject = config.get('jira.project')
+const jiraEpic = config.has('jira.epic') ? config.get('jira.epic') : undefined
 
 const jiraStartTransitionId = config.get('jira.start_transition_id')
 const jiraDoneTransitionId = config.get('jira.done_transition_id')
@@ -231,6 +232,7 @@ async function createHelpRequestInJira(summary, project, user, labels) {
             project: {
                 id: project.id
             },
+            ...(jiraEpic ? { parent: { key: jiraEpic } } : {}),
             labels: ['created-from-slack', ...labels],
             description: undefined,
             ...(user ? { reporter: { accountId: user } } : {})
@@ -248,7 +250,7 @@ async function createHelpRequest({
     const user = await convertEmail(userEmail)
 
     const project = await jira.getProject(jiraProject);
-    console.log(`Preparing to create in project ${jiraProject}/${project.id}, issue id ${issueTypeId}, issue name ${issueTypeName}`);
+    console.log(`Preparing to create in project ${jiraProject}/${project.id}, issue id ${issueTypeId}, issue name ${issueTypeName}, epic ${jiraEpic || 'not configured'}`);
 
     // https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-issues/#api-rest-api-2-issue-post
     // note: fields don't match 100%, our Jira version is a bit old (still a supported LTS though)

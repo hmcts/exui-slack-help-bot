@@ -16,17 +16,30 @@ const jiraDoneTransitionId = config.get('jira.done_transition_id')
 const extractProjectRegex = new RegExp(`(${jiraProject}-[\\d]+)`)
 
 const jiraBaseUrl = new URL(config.get('jira.base_url'))
+const jiraApiUrl = config.has('jira.cloud_id')
+    ? new URL(`${config.get('jira.api_url').replace(/\/+$/, '')}/${config.get('jira.cloud_id')}`)
+    : jiraBaseUrl
 
 const jira = new JiraApi({
-    protocol: 'https',
-    host: jiraBaseUrl.hostname,
-    port: jiraBaseUrl.port,
-    base: jiraBaseUrl.pathname.replace(/\/+$/, ''),
+    protocol: jiraApiUrl.protocol.replace(':', ''),
+    host: jiraApiUrl.hostname,
+    port: jiraApiUrl.port,
+    base: jiraApiUrl.pathname.replace(/\/+$/, ''),
     username: config.get('jira.username'),
     password: config.get('jira.api_token'),
     apiVersion: '3',
     strictSSL: true
 });
+
+console.log(`Configured Jira API endpoint: ${jiraApiUrl.origin}${jiraApiUrl.pathname}`)
+
+function jiraErrorDetails(err) {
+    return {
+        statusCode: err && err.statusCode,
+        message: err && err.message,
+        error: err && err.error
+    }
+}
 
 async function getSystemAccountId() {
     if (systemAccountId) {
@@ -245,14 +258,25 @@ async function createHelpRequest({
         result = await createHelpRequestInJira(summary, project, user, labels);
         console.log(JSON.stringify(result));
     } catch(err) {
-        // In case the user doesn't exist in Jira, use the authenticated service account.
-        const fallbackAccountId = await getSystemAccountId()
-        result = await createHelpRequestInJira(summary, project, fallbackAccountId, labels);
-        console.log(JSON.stringify(result));
-        
-        if (!result.key) {
-            console.log("Error creating help request in jira", JSON.stringify(result));
+        console.error("Error creating Jira issue with requested reporter", jiraErrorDetails(err))
+
+        if (!user) {
+            throw err
         }
+
+        // Omitting reporter lets Jira use the authenticated service account and
+        // avoids requiring the Modify Reporter permission.
+        try {
+            result = await createHelpRequestInJira(summary, project, undefined, labels);
+            console.log(JSON.stringify(result));
+        } catch (fallbackErr) {
+            console.error("Error creating Jira issue with the service-account reporter", jiraErrorDetails(fallbackErr))
+            throw fallbackErr
+        }
+    }
+
+    if (!result || !result.key) {
+        throw new Error(`Jira did not return an issue key: ${JSON.stringify(result)}`)
     }
 
     return result.key

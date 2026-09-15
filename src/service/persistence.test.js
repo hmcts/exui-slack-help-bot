@@ -28,12 +28,12 @@ describe('extractJiraId', () => {
             {
                 elements: [
                     {
-                        text: 'View on Jira: <https://hmcts.atlassian.net/browse/SBOX-61|SBOX-61>'
+                        text: 'View on Jira: <https://hmcts.atlassian.net/browse/EXUI-61|EXUI-61>'
                     }
                 ]
             }
         ])
 
-        expect(actual).toBe('SBOX-61')
+        expect(actual).toBe('EXUI-61')
     })
 })

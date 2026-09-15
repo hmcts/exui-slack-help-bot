@@ -49,7 +49,7 @@ Running the application requires the following tools to be installed in your env
   * [Docker](https://www.docker.com)
 
 You need to create a Slack App as detailed in the steps above. For development purposes, this will have to be created in a new Slack workspace.
-You will also need the JIRA details. For development purposes, these values can be found in the "env.template.txt" file for the HMCTS Jira SBOX Project.
+You will also need the Jira details for the HMCTS EXUI project.
 
 Set the relevant environment variables defined in [env.template.txt](env.template.txt) based on above steps.
 

@@ -40,7 +40,7 @@ Listens for new posts in a designated Slack channel and raises a coresponding re
 
 ## Getting Started with the Bot
 
-### Prerequisites
+### Prerequisites 
 
 Running the application requires the following tools to be installed in your environment:
 

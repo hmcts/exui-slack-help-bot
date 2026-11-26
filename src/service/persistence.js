@@ -310,7 +310,7 @@ async function updateHelpRequestDescription(issueId, fields) {
 
 async function addCommentToHelpRequest(externalSystemId, fields) {
     try {
-        await jira.addComment(externalSystemId, wikiToAdf(createComment(fields)))
+        return await jira.addComment(externalSystemId, wikiToAdf(createComment(fields)))
     } catch (err) {
         console.error(`Error creating comment in Jira issue ${externalSystemId}`, jiraErrorDetails(err))
         throw err

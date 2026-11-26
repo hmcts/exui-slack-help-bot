@@ -57,9 +57,28 @@ Profile lookups use `users.profile:read`; if a profile is unavailable, the Slack
 user ID is included instead. The Jira service account must also have permission
 to add comments to the issue, with token scopes allowing comment creation.
 
-Forwarding failures are logged as `Failed to copy Slack thread reply to Jira`
-with the channel and message timestamps. Jira API failures also log the issue
-key and error details.
+Comment-forwarding diagnostics are always logged at info level (warnings and
+errors where appropriate) with the prefix `[slack-jira-comment-sync]` followed
+by a JSON object. Message bodies, profiles, tokens, and full API responses are
+not included in these diagnostic payloads. Logs include:
+
+- `ready`: the bot has started, including the configured support channel ID.
+- `event_received`: an incoming Slack event reached middleware, before listener
+  filtering. If replying produces no event here, check Slack event subscriptions,
+  app installation, and the running bot's connection.
+- `skipped`: the exact reason a message was ignored, including channel mismatch,
+  missing parent, unrecognised help-request message, or missing Jira ticket link.
+- `parent_lookup_started` / `parent_lookup_completed`: whether Slack returned
+  the original help-request message and its blocks.
+- `jira_ticket_found`: the Jira key extracted from the help request.
+- `permalink_lookup_*`, `profile_lookup_*`, and `mention_conversion_*`: progress
+  through the Slack lookups and text preparation.
+- `jira_comment_started` / `jira_comment_completed`: the Jira request and its
+  completion, including the returned comment ID when available.
+- `failed`: the failing stage, API error, and missing Slack scopes when provided.
+
+Follow a reply using its `channel` and `ts`; the Jira key is included once found.
+Jira API failures also log the issue key and error details.
 
 ## Getting Started with the Bot
 

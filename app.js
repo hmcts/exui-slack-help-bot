@@ -747,64 +747,79 @@ async function replaceAsync(str, regex, asyncFn) {
  * Display name is normally better than real name, so we prefer that but fallback to real name.
  */
 function convertProfileToName(profile) {
-    let name = profile.display_name_normalized
-    if (!name) {
-        name = profile.real_name_normalized;
-    }
-    return name;
+    return profile?.display_name_normalized || profile?.display_name ||
+        profile?.real_name_normalized || profile?.real_name;
 }
 
-app.event('message', async ({ event, context, client, say }) => {
+async function getSlackUserName(client, userId) {
     try {
-        // filter unwanted channels in case someone invites the bot to it
-        // and only look at threaded messages
-        if (event.channel === reportChannelId && event.thread_ts) {
+        const { profile } = await client.users.profile.get({ user: userId });
+        return convertProfileToName(profile) || userId;
+    } catch (error) {
+        // A missing profile (for example an external user) must not lose the comment.
+        console.warn(`Could not resolve Slack profile for ${userId}`, error.data?.error || error.message);
+        return userId;
+    }
+}
+
+app.event('message', async ({ event, client }) => {
+    // Process new human replies, including replies also broadcast to the channel.
+    if (event.channel !== reportChannelId || !event.thread_ts ||
+        event.thread_ts === event.ts || !event.user || event.bot_id ||
+        (event.subtype && !['thread_broadcast', 'file_share'].includes(event.subtype)) ||
+        typeof event.text !== 'string' || !event.text.trim()) {
+        return;
+    }
+
+    try {
+        // Fetch only the parent message using the bot token; no thread pagination needed.
+        const { messages = [] } = await client.conversations.history({
+            channel: event.channel,
+            oldest: event.thread_ts,
+            latest: event.thread_ts,
+            inclusive: true,
+            limit: 1
+        });
+        const parent = messages.find(message => message.ts === event.thread_ts);
+
+        if (parent && ['New support request raised', 'Duplicate issue'].includes(parent.text)) {
+            const jiraId = extractJiraIdFromBlocks(parent.blocks);
+            if (!jiraId) {
+                console.warn('Could not find Jira ticket link in Slack help request', {
+                    channel: event.channel,
+                    thread_ts: event.thread_ts
+                });
+                return;
+            }
+
             const slackLink = (await client.chat.getPermalink({
                 channel: event.channel,
-                'message_ts': event.thread_ts
+                'message_ts': event.ts
             })).permalink
 
-            const user = (await client.users.profile.get({
-                user: event.user
-            }))
+            const name = await getSlackUserName(client, event.user);
 
-            const name = convertProfileToName(user.profile);
+            const groupRegex = /<!subteam\^[^>|]+\|([^>]+)>/g
+            const usernameRegex = /<@([^>|]+)(?:\|[^>]+)?>/g
 
-            const helpRequestMessages = (await client.conversations.replies({
-                channel: reportChannelId,
-                ts: event.thread_ts,
-                limit: 200, // after a thread is 200 long we'll break but good enough for now
-            })).messages
+            const possibleNewTargetText = event.text.replace(groupRegex, (match, name) => name)
 
-            if (helpRequestMessages.length > 0 && (
-                helpRequestMessages[0].text === 'New support request raised' ||
-                helpRequestMessages[0].text === 'Duplicate issue')
-            ) {
-                const jiraId = extractJiraIdFromBlocks(helpRequestMessages[0].blocks)
+            const newTargetText = await replaceAsync(possibleNewTargetText, usernameRegex, async (match, userId) => {
+                return `@${await getSlackUserName(client, userId)}`;
+            });
 
-                const groupRegex = /<!subteam\^.+\|([^>.]+)>/g
-                const usernameRegex = /<@([^>.]+)>/g
-
-                let possibleNewTargetText = event.text.replace(groupRegex, (match, $1) => $1)
-
-                const newTargetText = await replaceAsync(possibleNewTargetText, usernameRegex, async (match, $1) => {
-                    const user = (await client.users.profile.get({
-                        user: $1
-                    }))
-                    return `@${convertProfileToName(user.profile)}`
-                });
-
-                await addCommentToHelpRequest(jiraId, {
-                    slackLink,
-                    name,
-                    message: newTargetText
-                })
-            } else {
-                // either need to implement pagination or find a better way to get the first message in the thread
-                console.warn("Could not find jira ID, possibly thread is longer than 200 messages, TODO implement pagination");
-            }
+            await addCommentToHelpRequest(jiraId, {
+                slackLink,
+                name,
+                message: newTargetText
+            })
         }
     } catch (error) {
-        console.error(error);
+        console.error('Failed to copy Slack thread reply to Jira', {
+            channel: event.channel,
+            thread_ts: event.thread_ts,
+            ts: event.ts,
+            error: error.data?.error || error.message
+        });
     }
 })

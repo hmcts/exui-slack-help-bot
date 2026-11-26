@@ -38,6 +38,29 @@ Listens for new posts in a designated Slack channel and raises a coresponding re
 
 </details>
 
+### Slack thread comments
+
+New text replies in help-request threads are copied to the linked Jira issue
+with the author's name and a link to the reply. Bot messages, message edits,
+and deletions are ignored.
+
+Subscribe to the **bot event** `message.channels` for a public support channel,
+or `message.groups` for a private support channel. Grant the bot `channels:history`
+or `groups:history` respectively, and invite it to that channel. Reinstall the
+Slack app after changing OAuth scopes. `SLACK_REPORT_CHANNEL_ID` must match
+the channel where help requests are posted. Ticket creation alone does not
+confirm that message events or history access are configured.
+
+The bot reads the original help-request message using
+[`conversations.history`](https://docs.slack.dev/reference/methods/conversations.history/#retrieving-a-single-message).
+Profile lookups use `users.profile:read`; if a profile is unavailable, the Slack
+user ID is included instead. The Jira service account must also have permission
+to add comments to the issue, with token scopes allowing comment creation.
+
+Forwarding failures are logged as `Failed to copy Slack thread reply to Jira`
+with the channel and message timestamps. Jira API failures also log the issue
+key and error details.
+
 ## Getting Started with the Bot
 
 ### Prerequisites 

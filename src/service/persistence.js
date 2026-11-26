@@ -184,16 +184,21 @@ async function assignHelpRequest(issueId, email) {
  * @param blocks
  */
 function extractJiraIdFromBlocks(blocks) {
-    let viewOnJiraText
-    if (blocks.length === 3) {
-        viewOnJiraText = blocks[2].fields[0].text
-    } else {
-        viewOnJiraText = blocks[4].elements[0].text
+    for (const block of blocks || []) {
+        const texts = [block.text, ...(block.fields || []), ...(block.elements || [])];
+        for (const item of texts) {
+            const text = typeof item === 'string' ? item : item?.text;
+            // Only use the ticket link, rather than other Jira references in the request.
+            if (typeof text === 'string' && /View on Jira/i.test(text)) {
+                const project = extractProjectRegex.exec(text);
+                if (project) {
+                    return project[1];
+                }
+            }
+        }
     }
 
-    project = extractProjectRegex.exec(viewOnJiraText);
-
-    return (project) ? project[1] : 'undefined';
+    return undefined;
 }
 
 function extraJiraId(text) {
@@ -307,7 +312,8 @@ async function addCommentToHelpRequest(externalSystemId, fields) {
     try {
         await jira.addComment(externalSystemId, wikiToAdf(createComment(fields)))
     } catch (err) {
-        console.log("Error creating comment in jira", err)
+        console.error(`Error creating comment in Jira issue ${externalSystemId}`, jiraErrorDetails(err))
+        throw err
     }
 }
 

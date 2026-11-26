@@ -49,6 +49,29 @@ const reportChannel = config.get('slack.report_channel');
 // can't find an easy way to look this up via API unfortunately :(
 const reportChannelId = config.get('slack.report_channel_id');
 
+function logCommentSync(stage, details = {}, level = 'info') {
+    console[level](`[slack-jira-comment-sync] ${JSON.stringify({ stage, ...details })}`);
+}
+
+// Runs before event listeners so delivery can be distinguished from filtering.
+app.use(async ({ body, next }) => {
+    if (body.event) {
+        const event = body.event;
+        logCommentSync('event_received', {
+            event_id: body.event_id,
+            event_type: event.type,
+            subtype: event.subtype,
+            channel: event.channel,
+            expected_channel: reportChannelId,
+            ts: event.ts,
+            thread_ts: event.thread_ts || event.message?.thread_ts,
+            user: event.user,
+            is_bot: Boolean(event.bot_id)
+        });
+    }
+    await next();
+});
+
 //////////////////////////////////
 //// Setup health check page /////
 //////////////////////////////////
@@ -110,6 +133,10 @@ server.listen(port, () => {
 (async () => {
     await app.start();
     console.log('⚡️ Bolt app started');
+    logCommentSync('ready', {
+        report_channel: reportChannel,
+        expected_channel: reportChannelId
+    });
 })();
 
 const ws = new WorkflowStep('superbot_help_request', {
@@ -763,15 +790,31 @@ async function getSlackUserName(client, userId) {
 }
 
 app.event('message', async ({ event, client }) => {
+    const logContext = {
+        channel: event.channel,
+        thread_ts: event.thread_ts,
+        ts: event.ts
+    };
+    const trace = (stage, details = {}, level = 'info') =>
+        logCommentSync(stage, { ...logContext, ...details }, level);
+
     // Process new human replies, including replies also broadcast to the channel.
-    if (event.channel !== reportChannelId || !event.thread_ts ||
-        event.thread_ts === event.ts || !event.user || event.bot_id ||
-        (event.subtype && !['thread_broadcast', 'file_share'].includes(event.subtype)) ||
-        typeof event.text !== 'string' || !event.text.trim()) {
+    let skipReason;
+    if (event.channel !== reportChannelId) skipReason = 'channel_mismatch';
+    else if (!event.thread_ts) skipReason = 'not_a_thread_reply';
+    else if (event.thread_ts === event.ts) skipReason = 'parent_message';
+    else if (!event.user || event.bot_id) skipReason = 'not_a_human_message';
+    else if (event.subtype && !['thread_broadcast', 'file_share'].includes(event.subtype)) skipReason = 'unsupported_subtype';
+    else if (typeof event.text !== 'string' || !event.text.trim()) skipReason = 'no_text';
+
+    if (skipReason) {
+        trace('skipped', { reason: skipReason, subtype: event.subtype, expected_channel: reportChannelId });
         return;
     }
 
+    let stage = 'parent_lookup';
     try {
+        trace(stage + '_started');
         // Fetch only the parent message using the bot token; no thread pagination needed.
         const { messages = [] } = await client.conversations.history({
             channel: event.channel,
@@ -781,24 +824,39 @@ app.event('message', async ({ event, client }) => {
             limit: 1
         });
         const parent = messages.find(message => message.ts === event.thread_ts);
+        const recognisedParent = parent && ['New support request raised', 'Duplicate issue'].includes(parent.text);
+        trace('parent_lookup_completed', {
+            message_count: messages.length,
+            parent_found: Boolean(parent),
+            recognised_parent: Boolean(recognisedParent),
+            block_count: parent?.blocks?.length || 0
+        });
 
-        if (parent && ['New support request raised', 'Duplicate issue'].includes(parent.text)) {
+        if (recognisedParent) {
+            stage = 'jira_ticket_lookup';
             const jiraId = extractJiraIdFromBlocks(parent.blocks);
             if (!jiraId) {
-                console.warn('Could not find Jira ticket link in Slack help request', {
-                    channel: event.channel,
-                    thread_ts: event.thread_ts
-                });
+                trace('skipped', { reason: 'jira_ticket_link_not_found' }, 'warn');
                 return;
             }
+            logContext.jira_id = jiraId;
+            trace('jira_ticket_found');
 
+            stage = 'permalink_lookup';
+            trace(stage + '_started');
             const slackLink = (await client.chat.getPermalink({
                 channel: event.channel,
                 'message_ts': event.ts
             })).permalink
+            trace('permalink_lookup_completed', { permalink_found: Boolean(slackLink) });
 
+            stage = 'profile_lookup';
+            trace(stage + '_started');
             const name = await getSlackUserName(client, event.user);
+            trace('profile_lookup_completed', { used_user_id_fallback: name === event.user });
 
+            stage = 'mention_conversion';
+            trace(stage + '_started');
             const groupRegex = /<!subteam\^[^>|]+\|([^>]+)>/g
             const usernameRegex = /<@([^>|]+)(?:\|[^>]+)?>/g
 
@@ -807,19 +865,27 @@ app.event('message', async ({ event, client }) => {
             const newTargetText = await replaceAsync(possibleNewTargetText, usernameRegex, async (match, userId) => {
                 return `@${await getSlackUserName(client, userId)}`;
             });
+            trace('mention_conversion_completed');
 
-            await addCommentToHelpRequest(jiraId, {
+            stage = 'jira_comment';
+            trace(stage + '_started');
+            const comment = await addCommentToHelpRequest(jiraId, {
                 slackLink,
                 name,
                 message: newTargetText
             })
+            trace('jira_comment_completed', { comment_id: comment?.id });
+        } else {
+            trace('skipped', { reason: parent ? 'unrecognised_parent_message' : 'parent_not_found' }, 'warn');
         }
     } catch (error) {
-        console.error('Failed to copy Slack thread reply to Jira', {
-            channel: event.channel,
-            thread_ts: event.thread_ts,
-            ts: event.ts,
-            error: error.data?.error || error.message
-        });
+        trace('failed', {
+            failed_stage: stage,
+            error: error.data?.error || error.message,
+            code: error.code,
+            status_code: error.statusCode || error.status,
+            needed_scope: error.data?.needed,
+            provided_scopes: error.data?.provided
+        }, 'error');
     }
 })
